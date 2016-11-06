@@ -56,6 +56,34 @@ class CanadaTaxTypeResolverTest extends \PHPUnit_Framework_TestCase
                 ],
             ],
         ],
+        "ca_mb_gst" => [
+            "name" => "Manitoba GST",
+            "generic_label" => "gst",
+            "tag" => "CA",
+            "zone" => "ca_mb",
+            "rates" => [
+                [
+                    "id" => "ca_mb_gst",
+                    "name" => "Manitoba GST",
+                    "default" => true,
+                    "amounts" => [["id" => "ca_mb_gst_2013", "amount" => 0.05]]
+                ]
+            ]
+        ],
+        "ca_mb_pst" => [
+            "name" => "Manitoba PST",
+            "generic_label" => "pst",
+            "tag" => "CA",
+            "zone" => "ca_mb",
+            "rates" => [
+                [
+                    "id" => "ca_mb_pst",
+                    "name" => "Manitoba PST",
+                    "default" => true,
+                    "amounts" => [["id" => "ca_mb_pst_2013", "amount" => 0.08]]
+                ]
+            ]
+        ]
     ];
 
     /**
@@ -85,6 +113,18 @@ class CanadaTaxTypeResolverTest extends \PHPUnit_Framework_TestCase
                     'name' => 'Canada - Nova Scotia',
                     'country_code' => 'CA',
                     'administrative_area' => 'NS',
+                ],
+            ],
+        ],
+        'ca_mb' => [
+            'name' => 'Manitoba Tax',
+            'members' => [
+                [
+                    'type' => 'country',
+                    'id' => '1',
+                    'name' => 'Canada - Manitoba',
+                    'country_code' => 'CA',
+                    'administrative_area' => 'MB',
                 ],
             ],
         ],
@@ -120,11 +160,11 @@ class CanadaTaxTypeResolverTest extends \PHPUnit_Framework_TestCase
      * @covers ::resolve
      * @covers ::getTaxTypes
      *
-     * @uses \CommerceGuys\Tax\Resolver\TaxType\StoreRegistrationCheckerTrait
-     * @uses \CommerceGuys\Tax\Repository\TaxTypeRepository
-     * @uses \CommerceGuys\Tax\Model\TaxType
-     * @uses \CommerceGuys\Tax\Model\TaxRate
-     * @uses \CommerceGuys\Tax\Model\TaxRateAmount
+     * @uses    \CommerceGuys\Tax\Resolver\TaxType\StoreRegistrationCheckerTrait
+     * @uses    \CommerceGuys\Tax\Repository\TaxTypeRepository
+     * @uses    \CommerceGuys\Tax\Model\TaxType
+     * @uses    \CommerceGuys\Tax\Model\TaxRate
+     * @uses    \CommerceGuys\Tax\Model\TaxRateAmount
      * @depends testConstructor
      */
     public function testResolver($resolver)
@@ -156,6 +196,15 @@ class CanadaTaxTypeResolverTest extends \PHPUnit_Framework_TestCase
         $novaScotiaAddress->expects($this->any())
             ->method('getAdministrativeArea')
             ->will($this->returnValue('NS'));
+        $manitobaAddress = $this
+            ->getMockBuilder('CommerceGuys\Addressing\Address')
+            ->getMock();
+        $manitobaAddress->expects($this->any())
+            ->method('getCountryCode')
+            ->will($this->returnValue('CA'));
+        $manitobaAddress->expects($this->any())
+            ->method('getAdministrativeArea')
+            ->will($this->returnValue('MB'));
 
         // Nova Scotia store, Ontario customer.
         $context = $this->getContext($ontarioAddress, $novaScotiaAddress);
@@ -180,14 +229,31 @@ class CanadaTaxTypeResolverTest extends \PHPUnit_Framework_TestCase
         $context = $this->getContext($ontarioAddress, $usAddress);
         $result = $resolver->resolve($taxable, $context);
         $this->assertEquals([], $result);
+
+        // Ontario store, Manitoba customer.
+        $context = $this->getContext($manitobaAddress, $ontarioAddress);
+        $results = $resolver->resolve($taxable, $context);
+        reset($results);
+        $this->assertCount(2, $results);
+        $ids = [];
+        /** @var TaxType $result */
+        foreach ($results as $result) {
+            $this->assertInstanceOf('CommerceGuys\Tax\Model\TaxType', $result);
+            $ids[] = $result->getId();
+        }
+
+        foreach (["ca_mb_gst", "ca_mb_pst"] as $id) {
+            $this->assertContains($id, $ids);
+        }
+
     }
 
     /**
      * Returns a mock context based on the provided data.
      *
-     * @param AddressInterface $customerAddress    The customer address.
-     * @param AddressInterface $storeAddress       The store address.
-     * @param array            $storeRegistrations The store registrations.
+     * @param AddressInterface $customerAddress The customer address.
+     * @param AddressInterface $storeAddress The store address.
+     * @param array $storeRegistrations The store registrations.
      *
      * @return \CommerceGuys\Tax\Resolver\Context
      */
